@@ -21,18 +21,52 @@ def create_snowflake_connection():
 
 
 def load_dataframe_to_snowflake(dataframe, table_name, connection):
-    success, chunks, rows, output = write_pandas(
-        conn=connection,
-        df=dataframe,
-        table_name=table_name,
-        database="CUSTOMER_OPERATIONS_DB",
-        schema="RAW_AREA",
-        auto_create_table=False,
-        overwrite=False,
-        quote_identifiers=False
-    )
 
-    if not success:
-        raise RuntimeError(f"Failed to load data into {table_name}")
+    staging_table = f"{table_name}_STAGING"
 
-    print(f"Loaded {rows} rows into {table_name}")
+    cursor = connection.cursor()
+
+    try:
+        cursor.execute(f"""
+            CREATE TEMPORARY TABLE {staging_table}
+            LIKE CUSTOMER_OPERATIONS_DB.RAW_AREA.{table_name}
+        """)
+
+        success, chunks, rows, output = write_pandas(
+            conn=connection,
+            df=dataframe,
+            table_name=staging_table,
+            database="CUSTOMER_OPERATIONS_DB",
+            schema="RAW_AREA",
+            auto_create_table=False,
+            overwrite=False,
+            quote_identifiers=False
+        )
+
+        if not success or rows != len(dataframe):
+            raise RuntimeError(
+                f"Failed to load all rows into {staging_table}"
+            )
+
+        cursor.execute("BEGIN")
+
+        cursor.execute(f"""
+            DELETE FROM CUSTOMER_OPERATIONS_DB.RAW_AREA.{table_name}
+        """)
+
+        cursor.execute(f"""
+            INSERT INTO CUSTOMER_OPERATIONS_DB.RAW_AREA.{table_name}
+            SELECT * FROM CUSTOMER_OPERATIONS_DB.RAW_AREA.{staging_table}
+        """)
+
+        connection.commit()
+
+        print(f"Successfully replaced {table_name} with {rows} rows")
+
+    except Exception:
+        connection.rollback()
+        raise
+
+    finally:
+        cursor.execute(f"DROP TABLE IF EXISTS {staging_table}")
+        cursor.close()

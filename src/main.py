@@ -206,6 +206,6 @@ try:
         table_name="ADVISORS",
         connection=connection
     )
-    
+     
 finally:
     connection.close()
