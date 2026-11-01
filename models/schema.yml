@@ -1,0 +1,145 @@
+version: 2
+
+sources:
+  - name: raw
+    description: "Raw customer operations data loaded from the Python ingestion pipeline."
+    database: CUSTOMER_OPERATIONS_DB
+    schema: RAW_AREA
+    tables:
+      - name: interactions
+        description: "One record per customer interaction."
+      - name: nps_surveys
+        description: "One record per submitted NPS survey."
+      - name: advisors
+        description: "Advisor reference data, including team assignments."
+
+models:
+  - name: stg_interactions
+    description: "Clean staging representation of customer interactions."
+    columns:
+      - name: interaction_id
+        description: "Unique identifier for each interaction."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: customer_number
+        description: "Identifier of the customer involved in the interaction."
+
+      - name: customer_email
+        description: "Customer email address."
+
+      - name: interaction_date
+        description: "Date of the customer interaction."
+
+      - name: fcr_pass
+        description: "Boolean indicating whether the interaction was resolved on first contact."
+        data_tests:
+          - not_null
+
+      - name: aht_seconds
+        description: "Average handling time for the interaction, measured in seconds."
+
+      - name: agent_email
+        description: "Email identifier of the advisor who handled the interaction."
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('stg_advisors')
+                field: agent_email
+
+  - name: stg_nps_surveys
+    description: "Clean staging representation of customer NPS survey responses."
+    columns:
+      - name: interaction_id
+        description: "Interaction associated with the survey response."
+        data_tests:
+          - unique
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_interactions')
+                field: interaction_id
+
+      - name: customer_number
+        description: "Identifier of the customer who submitted the survey."
+
+      - name: customer_email
+        description: "Email address of the surveyed customer."
+
+      - name: interaction_date
+        description: "Date of the interaction associated with the survey."
+
+      - name: agent_email
+        description: "Advisor associated with the surveyed interaction."
+
+      - name: nps_score
+        description: "Customer satisfaction recommendation score from 0 to 10."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+
+  - name: stg_advisors
+    description: "Clean staging representation of advisor and team reference data."
+    columns:
+      - name: agent_email
+        description: "Unique email identifier for each advisor."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: team_id
+        description: "Identifier of the advisor's assigned team."
+
+      - name: team_name
+        description: "Name of the advisor's assigned team."
+
+  - name: mart_advisor_performance
+    description: "Advisor-level performance metrics combining interaction and NPS data."
+    columns:
+      - name: agent_email
+        description: "Unique advisor identifier."
+        data_tests:
+          - unique
+          - not_null
+
+      - name: team_id
+        description: "Advisor's team identifier."
+
+      - name: team_name
+        description: "Advisor's team name."
+
+      - name: total_interactions
+        description: "Total number of interactions handled by the advisor."
+
+      - name: fcr_interactions
+        description: "Number of interactions resolved on first contact."
+
+      - name: fcr_rate
+        description: "Percentage of interactions resolved on first contact."
+        data_tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0 AND fcr_rate <= 100"
+
+      - name: average_aht_seconds
+        description: "Average handling time in seconds."
+
+      - name: total_surveys
+        description: "Total number of NPS survey responses received."
+
+      - name: promoters
+        description: "Number of survey responses with scores of 9 or 10."
+
+      - name: detractors
+        description: "Number of survey responses with scores between 0 and 6."
+
+      - name: nps
+        description: "Net Promoter Score calculated as promoter percentage minus detractor percentage."
+        data_tests:
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= -100 AND nps <= 100"
