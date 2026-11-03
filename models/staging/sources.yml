@@ -1,0 +1,10 @@
+version: 2
+
+sources:
+  - name: raw
+    database: CUSTOMER_OPERATIONS_DB
+    schema: RAW_AREA
+    tables:
+      - name: interactions
+      - name: nps_surveys
+      - name: advisors
