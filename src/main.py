@@ -1,4 +1,6 @@
+
 import pandas as pd
+
 from extract import extract_csv
 from load import create_snowflake_connection, load_dataframe_to_snowflake
 from validate import (
@@ -11,8 +13,10 @@ from validate import (
     validate_integer_range,
     validate_positive_integer,
     validate_customer_consistency,
-    
 )
+
+
+# Extract datasets
 
 interactions = extract_csv(
     "data/synthetic_interaction_records_2025.csv"
@@ -26,15 +30,19 @@ advisors = extract_csv(
     "data/synthetic_advisor_reference.csv"
 )
 
-interactions["interaction_date"] = pd.to_datetime(
-    interactions["interaction_date"]
-)
 
-nps_surveys["interaction_date"] = pd.to_datetime(
-    nps_surveys["interaction_date"]
-)
+# Parse timestamps and explicitly use microsecond precision
+
+for dataframe in [interactions, nps_surveys]:
+    dataframe["interaction_date"] = (
+        pd.to_datetime(
+            dataframe["interaction_date"],
+            errors="raise"
+        ).astype("datetime64[us]")
+    )
 
 
+# Validate required columns
 
 interactions_columns_valid = validate_required_columns(
     interactions,
@@ -66,6 +74,9 @@ advisors_columns_valid = validate_required_columns(
     ["agent_email", "team_id", "team_name"],
 )
 
+
+# Validate relationships between datasets
+
 nps_interactions_valid = validate_nps_interactions(
     nps_surveys, interactions
 )
@@ -73,6 +84,9 @@ nps_interactions_valid = validate_nps_interactions(
 agent_interactions_valid = validate_agent_interactions(
     interactions, advisors
 )
+
+
+# Validate unique keys
 
 interaction_ids_valid = validate_unique_key(
     interactions, "interaction_id"
@@ -85,6 +99,9 @@ survey_ids_valid = validate_unique_key(
 advisor_ids_valid = validate_unique_key(
     advisors, "agent_email"
 )
+
+
+# Validate missing values
 
 interactions_complete = validate_no_missing_values(
     interactions,
@@ -116,6 +133,9 @@ advisors_complete = validate_no_missing_values(
     ["agent_email", "team_id", "team_name"],
 )
 
+
+# Validate allowed values and numeric ranges
+
 fcr_values_valid = validate_allowed_values(
     interactions,
     "fcr_pass",
@@ -134,10 +154,27 @@ aht_values_valid = validate_positive_integer(
     "aht_seconds",
 )
 
+
+# Validate customer consistency
+
 customer_consistency_valid = validate_customer_consistency(
     nps_surveys,
     interactions,
 )
+
+
+# Validate timestamp range
+
+valid_interaction_dates = (
+    interactions["interaction_date"].dt.year.eq(2025).all()
+)
+
+valid_nps_dates = (
+    nps_surveys["interaction_date"].dt.year.eq(2025).all()
+)
+
+
+# Stop execution if any validation fails
 
 if not interactions_columns_valid:
     raise ValueError("Interaction dataset is missing required columns")
@@ -184,7 +221,18 @@ if not aht_values_valid:
 if not customer_consistency_valid:
     raise ValueError("Customer numbers do not match between NPS and interactions")
 
+if not valid_interaction_dates or not valid_nps_dates:
+    raise ValueError("Interaction dates must all belong to 2025")
+
+
 print("All validation checks passed")
+
+print("Interaction timestamp dtype:", interactions["interaction_date"].dtype)
+print("Sample interaction dates:")
+print(interactions["interaction_date"].head())
+
+
+# Load datasets into Snowflake
 
 connection = create_snowflake_connection()
 
@@ -194,7 +242,7 @@ try:
         table_name="INTERACTIONS",
         connection=connection
     )
-    
+
     load_dataframe_to_snowflake(
         dataframe=nps_surveys,
         table_name="NPS_SURVEYS",
@@ -206,6 +254,6 @@ try:
         table_name="ADVISORS",
         connection=connection
     )
-     
+
 finally:
     connection.close()

@@ -1,4 +1,6 @@
+
 import os
+
 import snowflake.connector
 from snowflake.connector.pandas_tools import write_pandas
 from dotenv import load_dotenv
@@ -40,12 +42,15 @@ def load_dataframe_to_snowflake(dataframe, table_name, connection):
             schema="RAW_AREA",
             auto_create_table=False,
             overwrite=False,
-            quote_identifiers=False
+            quote_identifiers=False,
+            use_logical_type=True
         )
 
         if not success or rows != len(dataframe):
             raise RuntimeError(
-                f"Failed to load all rows into {staging_table}"
+                f"Failed to load all rows into {staging_table}. "
+                f"Expected {len(dataframe)} rows, loaded {rows}. "
+                f"Details: {output}"
             )
 
         cursor.execute("BEGIN")
@@ -61,12 +66,19 @@ def load_dataframe_to_snowflake(dataframe, table_name, connection):
 
         connection.commit()
 
-        print(f"Successfully replaced {table_name} with {rows} rows")
+        print(
+            f"Successfully replaced {table_name} "
+            f"with {rows} rows across {chunks} chunks"
+        )
 
     except Exception:
         connection.rollback()
         raise
 
     finally:
-        cursor.execute(f"DROP TABLE IF EXISTS {staging_table}")
-        cursor.close()
+        try:
+            cursor.execute(
+                f"DROP TABLE IF EXISTS CUSTOMER_OPERATIONS_DB.RAW_AREA.{staging_table}"
+            )
+        finally:
+            cursor.close()
