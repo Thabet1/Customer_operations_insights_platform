@@ -164,14 +164,17 @@ The Power BI report contains three pages:
 
 A high-level view of customer operations, including total interactions, FCR rate, average AHT, overall NPS, monthly interaction trends, NPS response distribution, and interactions by team.
 
+![Executive Overview](power_bi/screenshots/executive-overview.png)
 ### 2. Advisor & Team Performance
 
 A performance view for comparing advisors and teams. It includes advisor-level metrics and focuses attention on the lowest-performing advisors by NPS and FCR.
 
+![Advisor and Team Performance](power_bi/screenshots/advisor-team-performance.png)
 ### 3. Customer Experience
 
 A customer-experience view showing survey volume, NPS, promoter and detractor counts, monthly NPS-category distribution, and NPS trends.
 
+![Customer Experience](power_bi/screenshots/customer-experience.png)
 **Power BI file:** [Open the PBIX report](power_bi/customer_operations_insights.pbix)
 
 The report uses the dbt marts as its analytical source. Its date and team filters are designed to work across the relevant report pages.
